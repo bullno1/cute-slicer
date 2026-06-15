@@ -1,0 +1,26 @@
+#!/bin/sh
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 SPRITESHEET" >&2
+    exit 1
+fi
+
+sheet=$1
+
+# Get dimensions
+set -- $(magick identify -format '%w %h' "$sheet")
+w=$1
+h=$2
+
+tile_w=$((w / 3))
+tile_h=$((h / 4))
+
+# Get background color from the sheet's top-left pixel
+bg=$(magick "$sheet" -format '%[pixel:p{0,0}]' info:)
+
+# Split into 12 sprites and make the background transparent
+magick "$sheet" \
+    -crop "${tile_w}x${tile_h}" \
+    +repage \
+    -transparent "$bg" \
+    sprite_%02d.png
