@@ -56,6 +56,10 @@ handle_resize(void) {
 	int canvas_height = cf_round((float)backbuffer_height / display_scale);
 	BLOG_INFO("Canvas size: %d x %d", canvas_width, canvas_height);
 
+	if (window_width != cf_app_get_width() || window_height != cf_app_get_height()) {
+		cf_app_set_size(window_width, window_height);
+	}
+
 	cf_app_set_canvas_size(canvas_width, canvas_height);
 	cf_draw_projection(cf_ortho_2d(0.f, 0.f, canvas_width, canvas_height));
 }
