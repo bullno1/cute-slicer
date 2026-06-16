@@ -86,6 +86,16 @@ init(int argc, const char** argv) {
 	cf_clear_color(0.5f, 0.5f, 0.5f, 1.f);
 }
 
+static void
+cleanup(void) {
+	cf_image_free(&active_image);
+	if (active_sprite.id != cf_sprite_defaults().id) {
+		cf_easy_sprite_unload(&active_sprite);
+	}
+
+	cf_destroy_app();
+}
+
 static CF_Result
 load_png(const char* path, CF_Image* out) {
 	CF_Result result;
@@ -449,21 +459,8 @@ update(void) {
 	cf_app_draw_onto_screen(true);
 }
 
-static void
-cleanup(void) {
-	cf_image_free(&active_image);
-	if (active_sprite.id != cf_sprite_defaults().id) {
-		cf_easy_sprite_unload(&active_sprite);
-	}
-
-	cf_destroy_app();
-}
-
-
-static bgame_app_t app = {
+BGAME_APP {
 	.init = init,
 	.cleanup = cleanup,
 	.update = update,
 };
-
-BGAME_ENTRYPOINT(app)
