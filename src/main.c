@@ -1,11 +1,13 @@
 #include <bgame/entrypoint.h>
 #include <bgame/allocator/frame.h>
 #include <bgame/utils.h>
+#include <bgame/shader.h>
 #include <cute.h>
 #include <blog.h>
 #include <dcimgui.h>
 #include <SDL3/SDL_video.h>
 #include <SDL3/SDL_dialog.h>
+#include "gen/checker_shd.h"
 
 typedef struct {
 	int x, y;
@@ -19,6 +21,7 @@ BGAME_VAR(ivec2_t, grid_size) = { 16, 16 };
 BGAME_VAR(CF_Sprite, active_sprite) = { };
 BGAME_VAR(CF_Image, active_image) = { };
 BGAME_VAR(ivec2_t, selected_pos) = { };
+BGAME_VAR(CF_Shader, shd_checker) = { };
 
 static ivec2_t grid_pos = { };
 static CF_Coroutine current_modal = { };
@@ -84,6 +87,8 @@ init(int argc, const char** argv) {
 	cf_set_fixed_timestep(60);
 	cf_app_set_vsync(true);
 	cf_clear_color(0.5f, 0.5f, 0.5f, 1.f);
+
+	bgame_load_draw_shader(&shd_checker, checker_shd_bytecode);
 }
 
 static void
@@ -383,6 +388,21 @@ update(void) {
 				NULL
 			);
 			break;
+	}
+
+	BGAME_SCOPE(cf_draw_push_shape_aa(0.f), cf_draw_pop_shape_aa())
+	BGAME_SCOPE(cf_draw_push_shader(shd_checker), cf_draw_pop_shader())
+	{
+		cf_draw_set_uniform_float("u_grid_size", 32.f);
+		cf_draw_set_uniform_float("u_screen_w", cf_app_get_width());
+		cf_draw_set_uniform_float("u_screen_h", cf_app_get_height());
+		cf_draw_set_uniform_color("u_color1", cf_make_color_hex(0xcccccc));
+		cf_draw_set_uniform_color("u_color2", cf_make_color_hex(0x999999));
+		cf_draw_box(
+			cf_make_aabb_pos_w_h(cf_v2(0.f), cf_app_get_width(), cf_app_get_height()),
+			0.f,
+			0.f
+		);
 	}
 
 	BGAME_SCOPE(cf_draw_push(), cf_draw_pop()) {
