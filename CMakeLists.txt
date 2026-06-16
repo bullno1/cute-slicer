@@ -1,5 +1,7 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.25)
 project(cute-slicer)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Fix output dir
 set(CMAKE_BINARY_DIR ${CMAKE_SOURCE_DIR})
@@ -16,10 +18,11 @@ set(CMAKE_C_EXTENSIONS OFF)
 #endif ()
 
 # Add deps first
-
+set(CMAKE_FOLDER "deps")
 add_subdirectory(deps)
 
 # Then everything else to avoid leaking into deps
 
 include("deps/bgame/bgame.cmake")
+set(CMAKE_FOLDER "")
 add_subdirectory(src)
