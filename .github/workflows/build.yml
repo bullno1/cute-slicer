@@ -1,0 +1,31 @@
+---
+name: Build
+run-name: Build
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+on:
+  - push
+jobs:
+  steamrt:
+    name: SteamRT
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.steamos.cloud/steamrt/steamrt4/sdk:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          create-symlink: true
+          key: ccache-${{ github.job }}
+          max-size: 16GB
+
+      - name: Build
+        env:
+          RELOADABLE: OFF
+        run: cmd/steamrt/build
