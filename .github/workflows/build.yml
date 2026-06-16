@@ -29,3 +29,43 @@ jobs:
         env:
           RELOADABLE: OFF
         run: cmd/steamrt/build
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    env:
+      EM_VERSION: 6.0.0
+      EM_CACHE_FOLDER: 'emsdk-cache'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.EM_CACHE_FOLDER }}
+          key: emsdk-${{ env.EM_VERSION }}
+
+      - name: Setup emscripten
+        uses: emscripten-core/setup-emsdk@v15
+        with:
+          version: ${{ env.EM_VERSION }}
+          actions-cache-folder: ${{ env.EM_CACHE_FOLDER }}
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          create-symlink: true
+          key: ccache-${{ github.job }}
+          max-size: 16GB
+
+      - name: Install CMake
+        uses: ssrobins/install-cmake@v1
+
+      - name: Prebuild emscripten libs
+        run: embuilder build libc sdl3
+
+      - name: Build
+        run: cmd/web/build
