@@ -8,6 +8,7 @@
 #include <SDL3/SDL_video.h>
 #include <SDL3/SDL_dialog.h>
 #include "gen/checker_shd.h"
+#include "gen/grid_shd.h"
 
 typedef struct {
 	int x, y;
@@ -22,6 +23,7 @@ BGAME_VAR(CF_Sprite, active_sprite) = { };
 BGAME_VAR(CF_Image, active_image) = { };
 BGAME_VAR(ivec2_t, selected_pos) = { };
 BGAME_VAR(CF_Shader, shd_checker) = { };
+BGAME_VAR(CF_Shader, shd_grid) = { };
 
 static ivec2_t grid_pos = { };
 static CF_Coroutine current_modal = { };
@@ -61,8 +63,8 @@ static void
 init(int argc, const char** argv) {
 	// Cute Framework
 	if (!app_created) {
-		int width  = 640;
-		int height = 360;
+		int width  = 1280;
+		int height = 720;
 
 		BLOG_INFO("Creating app");
 		int options =
@@ -89,6 +91,7 @@ init(int argc, const char** argv) {
 	cf_clear_color(0.5f, 0.5f, 0.5f, 1.f);
 
 	bgame_load_draw_shader(&shd_checker, checker_shd_bytecode);
+	bgame_load_draw_shader(&shd_grid, grid_shd_bytecode);
 }
 
 static void
@@ -341,6 +344,9 @@ update(void) {
 			selected_pos.x += 1;
 		}
 
+		selected_pos.x = cf_clamp(selected_pos.x, 0, (int)(active_sprite.w / grid_size.x) - 1);
+		selected_pos.y = cf_clamp(selected_pos.y, 0, (int)(active_sprite.h / grid_size.y) - 1);
+
 		if (cf_key_down(CF_KEY_LCTRL) || cf_key_down(CF_KEY_LCTRL)) {
 			if (cf_key_just_pressed(CF_KEY_O)) {
 				cmd = CMD_LOAD;
@@ -393,7 +399,7 @@ update(void) {
 	BGAME_SCOPE(cf_draw_push_shape_aa(0.f), cf_draw_pop_shape_aa())
 	BGAME_SCOPE(cf_draw_push_shader(shd_checker), cf_draw_pop_shader())
 	{
-		cf_draw_set_uniform_float("u_grid_size", 32.f);
+		cf_draw_set_uniform_v2("u_grid_size", cf_v2(grid_size.x, grid_size.y));
 		cf_draw_set_uniform_float("u_screen_w", cf_app_get_width());
 		cf_draw_set_uniform_float("u_screen_h", cf_app_get_height());
 		cf_draw_set_uniform_color("u_color1", cf_make_color_hex(0xcccccc));
@@ -410,29 +416,19 @@ update(void) {
 		cf_draw_scale(draw_scale, draw_scale);
 
 		if (active_sprite.easy_sprite_id != cf_sprite_defaults().id) {
-			cf_draw_sprite(&active_sprite);
 
 			if (draw_grid) {
 				BGAME_SCOPE(
-					cf_draw_push_color(cf_make_color_rgba(0, 0, 0, 120)),
-					cf_draw_pop_color()
+					cf_draw_push_shader(shd_grid),
+					cf_draw_pop_shader()
 				) {
-					for (int x = 0; x < active_sprite.w; x += grid_size.x) {
-						for (int y = 0; y < active_sprite.h; y += grid_size.y) {
-							CF_Color color = cf_make_color_rgba(0, 0, 0, 128);
-
-							CF_Aabb cell = cf_make_aabb_from_top_left(
-								cf_v2(
-									-active_sprite.w * 0.5f + x,
-									 active_sprite.h * 0.5f - y
-								),
-								grid_size.x, grid_size.y
-							);
-
-							cf_draw_box(cell, 0.01f, 0.01f);
-						}
-					}
+					cf_draw_set_uniform_v2("u_grid_size", cf_v2(grid_size.x, grid_size.y));
+					cf_draw_set_uniform_color("u_grid_color", cf_make_color_rgba(0, 0, 0, 255));
+					cf_draw_set_uniform_float("u_line_width", 1.0f);
+					cf_draw_sprite(&active_sprite);
 				}
+			} else {
+				cf_draw_sprite(&active_sprite);
 			}
 
 			CF_Aabb bounding_box = cf_make_aabb_pos_w_h(cf_v2(0.f), active_sprite.w, active_sprite.h);
