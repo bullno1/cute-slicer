@@ -5,6 +5,8 @@
 
 Individual tileset extractor for Cute Framework.
 
+![screenshot](./screenshot.png)
+
 # Motivation
 
 Because Cute Framework has automatic atlasing, loading an entire tileset just to use a few tiles procedurally is annoying.
