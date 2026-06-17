@@ -15,6 +15,17 @@ This is a tool to quickly achieve that.
 This project also serves as a way to test [bgame](https://github.com/bullno1/bgame) multiplatform build pipeline.
 
 # Building
+## Windows
+
+```
+.\bootstrap.bat
+.\cmd\win\prepare.bat  # A solution will be created at .build/win/<Config>
+# Either open it in Visual Studio or
+.\cmd\win\build.bat
+```
+
+The files should be in `bin/win/RelWithDebInfo-static` or `bin/win/Debug-static`.
+
 ## Linux
 
 ```
