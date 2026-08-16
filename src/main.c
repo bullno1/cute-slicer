@@ -92,7 +92,7 @@ init(int argc, const char** argv) {
 	}
 
 	cf_set_fixed_timestep(60);
-	cf_app_set_vsync(true);
+	cf_app_set_present_mode(CF_PRESENT_MODE_VSYNC);
 	cf_clear_color(0.5f, 0.5f, 0.5f, 1.f);
 
 	bgame_load_draw_shader(&shd_checker, checker_shd_bytecode);
