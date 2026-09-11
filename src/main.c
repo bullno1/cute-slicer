@@ -20,6 +20,8 @@ BGAME_VAR(CF_V2, draw_offset) = { 0 };
 BGAME_VAR(float, draw_scale) = 1.f;
 BGAME_VAR(bool, draw_grid) = true;
 BGAME_VAR(ivec2_t, grid_size) = { 16, 16 };
+BGAME_VAR(ivec2_t, grid_offset) = { 0, 0 };
+BGAME_VAR(ivec2_t, grid_gap) = { 0, 0 };
 BGAME_VAR(CF_Sprite, active_sprite) = { };
 BGAME_VAR(CF_Image, active_image) = { };
 BGAME_VAR(ivec2_t, selected_pos) = { };
@@ -38,6 +40,51 @@ typedef enum {
 	CMD_LOAD,
 	CMD_SAVE,
 } cmd_t;
+
+// Distance in pixels from the start of one tile to the start of the next.
+static ivec2_t
+grid_pitch(void) {
+	return (ivec2_t){ grid_size.x + grid_gap.x, grid_size.y + grid_gap.y };
+}
+
+// Number of whole tiles that fit along one axis, given the image extent.
+static int
+grid_count(int extent, int offset, int size, int gap) {
+	int usable = extent - offset;
+	if (usable < size) { return 0; }
+	// n tiles need n * size + (n - 1) * gap pixels.
+	return (usable + gap) / (size + gap);
+}
+
+static int
+grid_cols(void) {
+	return grid_count(active_image.w, grid_offset.x, grid_size.x, grid_gap.x);
+}
+
+static int
+grid_rows(void) {
+	return grid_count(active_image.h, grid_offset.y, grid_size.y, grid_gap.y);
+}
+
+// Top-left pixel of a tile in image space (y grows downward).
+static ivec2_t
+tile_origin(ivec2_t pos) {
+	ivec2_t pitch = grid_pitch();
+	return (ivec2_t){
+		grid_offset.x + pos.x * pitch.x,
+		grid_offset.y + pos.y * pitch.y,
+	};
+}
+
+// Top-left corner of a tile in world space (sprite centered at origin, y up).
+static CF_V2
+tile_world_top_left(ivec2_t pos) {
+	ivec2_t origin = tile_origin(pos);
+	return cf_v2(
+		-active_sprite.w * 0.5f + origin.x,
+		active_sprite.h * 0.5f - origin.y
+	);
+}
 
 static void
 handle_resize(void) {
@@ -246,11 +293,12 @@ save_slice(void) {
 		.pix = barena_memalign(&arena, sizeof(CF_Pixel) * grid_size.x * grid_size.y, _Alignof(CF_Pixel)),
 	};
 
+	ivec2_t origin = tile_origin(selected_pos);
 	for (int y = 0; y < grid_size.y; ++y) {
-		int pix_y = cf_min(selected_pos.y * grid_size.y + y, active_image.h);
+		int pix_y = cf_clamp(origin.y + y, 0, active_image.h - 1);
 
 		for (int x = 0; x < grid_size.x; ++x) {
-			int pix_x = cf_min(selected_pos.x * grid_size.x + x, active_image.w);
+			int pix_x = cf_clamp(origin.x + x, 0, active_image.w - 1);
 
 			slice.pix[y * slice.w + x] = active_image.pix[pix_y * active_image.w + pix_x];
 		}
@@ -293,9 +341,15 @@ update(void) {
 
 		ImGui_InputFloatEx("Zoom", &draw_scale, 0.1f, 0.2f, "%f", ImGuiInputTextFlags_None);
 		ImGui_InputInt2("Grid size", &grid_size.x, ImGuiInputTextFlags_None);
+		ImGui_InputInt2("Grid offset", &grid_offset.x, ImGuiInputTextFlags_None);
+		ImGui_InputInt2("Grid gap", &grid_gap.x, ImGuiInputTextFlags_None);
 		ImGui_Checkbox("Show grid", &draw_grid);
 		grid_size.x = cf_max(1, grid_size.x);
 		grid_size.y = cf_max(1, grid_size.y);
+		grid_offset.x = cf_max(0, grid_offset.x);
+		grid_offset.y = cf_max(0, grid_offset.y);
+		grid_gap.x = cf_max(0, grid_gap.x);
+		grid_gap.y = cf_max(0, grid_gap.y);
 
 		ImGui_Separator();
 		ImGui_LabelText("Grid x", "%d", grid_pos.x);
@@ -304,8 +358,8 @@ update(void) {
 		ImGui_LabelText("Height", "%d", active_image.h);
 
 		ImGui_Separator();
-		ImGui_LabelText("Rows", "%d", active_image.w / grid_size.x);
-		ImGui_LabelText("Cols", "%d", active_image.h / grid_size.y);
+		ImGui_LabelText("Cols", "%d", grid_cols());
+		ImGui_LabelText("Rows", "%d", grid_rows());
 
 		ImGui_Separator();
 		if (ImGui_Button("Save")) {
@@ -328,13 +382,14 @@ update(void) {
 		world_mouse = cf_screen_to_world(cf_v2(cf_mouse_x(), cf_mouse_y()));
 		cf_draw_translate_v2(draw_offset);
 		cf_draw_scale(draw_scale, draw_scale);
+		ivec2_t pitch = grid_pitch();
 		grid_pos.x = cf_clamp(
-			(int)cf_floor((active_sprite.w * 0.5f + world_mouse.x) / (float)grid_size.x),
-			0, (int)(active_sprite.w / grid_size.x)
+			(int)cf_floor((active_sprite.w * 0.5f + world_mouse.x - grid_offset.x) / (float)pitch.x),
+			0, cf_max(0, grid_cols() - 1)
 		);
 		grid_pos.y = cf_clamp(
-			(int)cf_floor((active_sprite.h * 0.5f - world_mouse.y) / (float)grid_size.y),
-			0, (int)(active_sprite.h / grid_size.y)
+			(int)cf_floor((active_sprite.h * 0.5f - world_mouse.y - grid_offset.y) / (float)pitch.y),
+			0, cf_max(0, grid_rows() - 1)
 		);
 	}
 
@@ -362,8 +417,8 @@ update(void) {
 			selected_pos.x += 1;
 		}
 
-		selected_pos.x = cf_clamp(selected_pos.x, 0, (int)(active_sprite.w / grid_size.x) - 1);
-		selected_pos.y = cf_clamp(selected_pos.y, 0, (int)(active_sprite.h / grid_size.y) - 1);
+		selected_pos.x = cf_clamp(selected_pos.x, 0, cf_max(0, grid_cols() - 1));
+		selected_pos.y = cf_clamp(selected_pos.y, 0, cf_max(0, grid_rows() - 1));
 
 		if (cf_key_down(CF_KEY_LCTRL) || cf_key_down(CF_KEY_LCTRL)) {
 			if (cf_key_just_pressed(CF_KEY_O)) {
@@ -422,6 +477,8 @@ update(void) {
 					cf_draw_pop_shader()
 				) {
 					cf_draw_set_uniform_v2("u_grid_size", cf_v2(grid_size.x, grid_size.y));
+					cf_draw_set_uniform_v2("u_grid_offset", cf_v2(grid_offset.x, grid_offset.y));
+					cf_draw_set_uniform_v2("u_grid_gap", cf_v2(grid_gap.x, grid_gap.y));
 					cf_draw_set_uniform_color("u_grid_color", cf_make_color_rgba(0, 0, 0, 255));
 					cf_draw_set_uniform_float("u_line_width", 1.0f);
 					cf_draw_sprite(&active_sprite);
@@ -445,10 +502,7 @@ update(void) {
 					cf_draw_pop_color()
 				) {
 					CF_Aabb hovered_cell = cf_make_aabb_from_top_left(
-						cf_v2(
-							-active_sprite.w * 0.5f + grid_pos.x * grid_size.x,
-							active_sprite.h * 0.5f - grid_pos.y * grid_size.y
-							),
+						tile_world_top_left(grid_pos),
 						grid_size.x, grid_size.y
 					);
 					cf_draw_box(hovered_cell, 1.0f, 0.1f);
@@ -460,10 +514,7 @@ update(void) {
 				cf_draw_pop_color()
 			) {
 				CF_Aabb selected_cell = cf_make_aabb_from_top_left(
-					cf_v2(
-						-active_sprite.w * 0.5f + selected_pos.x * grid_size.x,
-						active_sprite.h * 0.5f - selected_pos.y * grid_size.y
-						),
+					tile_world_top_left(selected_pos),
 					grid_size.x, grid_size.y
 				);
 				cf_draw_box(selected_cell, 0.1f, 0.5f + cf_sin(CF_SECONDS * 5.f) * 0.2f);
