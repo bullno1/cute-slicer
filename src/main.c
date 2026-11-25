@@ -7,7 +7,9 @@
 #include <blog.h>
 #include <dcimgui.h>
 #include <SDL3/SDL_video.h>
-#include "ufa/ufa.h"
+#include <barena.h>
+#define UFA_ARENA_TYPE barena_t
+#include <ufa.h>
 #include "gen/checker_shd.h"
 #include "gen/grid_shd.h"
 
@@ -30,6 +32,7 @@ BGAME_VAR(CF_Shader, shd_grid) = { };
 
 static ivec2_t grid_pos = { };
 static CF_Coroutine current_modal = { };
+static CF_MouseButton drag_button = CF_MOUSE_BUTTON_MIDDLE;
 
 typedef struct {
 	void (*entry)(void);
@@ -195,10 +198,11 @@ start_modal(void(*entry)(void)) {
 
 static void
 drag(void) {
+	CF_MouseButton button = drag_button;
 	CF_V2 start_pos = { cf_mouse_x(), -cf_mouse_y() };
 	CF_V2 original_offset = draw_offset;
 
-	while (cf_mouse_down(CF_MOUSE_BUTTON_MIDDLE) && modal_yield()) {
+	while (cf_mouse_down(button) && modal_yield()) {
 		CF_V2 current_pos = { cf_mouse_x(), -cf_mouse_y() };
 		draw_offset = cf_add(original_offset, cf_sub(current_pos, start_pos));
 	}
@@ -218,6 +222,8 @@ open_image(void) {
 
 	ufa_open_file_t* open_file = ufa_begin_open_file((ufa_config_t){
 		.arena = &arena,
+		.memalign = barena_memalign,
+		.parent_window = cf_app_get_window(),
 		.filters = filters,
 		.num_filters = CF_ARRAY_SIZE(filters),
 	});
@@ -276,8 +282,11 @@ save_slice(void) {
 
 	ufa_save_file_t* save_file = ufa_begin_save_file((ufa_config_t){
 		.arena = &arena,
+		.memalign = barena_memalign,
+		.parent_window = cf_app_get_window(),
 		.filters = filters,
 		.num_filters = CF_ARRAY_SIZE(filters),
+		.suggested_name = "grid.png",
 	});
 
 	while (modal_yield() && ufa_check_save_file(save_file) == UFA_PENDING) {
@@ -369,6 +378,10 @@ update(void) {
 	ImGui_End();
 
 	if (cf_mouse_just_pressed(CF_MOUSE_BUTTON_MIDDLE)) {
+		drag_button = CF_MOUSE_BUTTON_MIDDLE;
+		start_modal(drag);
+	} else if (cf_mouse_just_pressed(CF_MOUSE_BUTTON_RIGHT)) {
+		drag_button = CF_MOUSE_BUTTON_RIGHT;
 		start_modal(drag);
 	}
 
