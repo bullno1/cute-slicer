@@ -1,89 +1,104 @@
----
 name: Build
-run-name: Build
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+
 on:
-  - push
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   steamrt:
-    name: SteamRT
+    name: steamrt / static
     runs-on: ubuntu-latest
-    container:
-      image: registry.gitlab.steamos.cloud/steamrt/steamrt4/sdk:latest
+    container: registry.gitlab.steamos.cloud/steamrt/steamrt4/sdk:latest
+    timeout-minutes: 30
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/../ccache
+      RELOADABLE: "OFF"
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Restore ccache
+        uses: actions/cache@v6
         with:
-          create-symlink: true
-          key: ccache-${{ github.job }}
-          max-size: 16GB
+          path: ../ccache
+          key: ccache-steamrt-${{ github.sha }}
+          restore-keys: ccache-steamrt-
 
       - name: Build
-        env:
-          RELOADABLE: OFF
-        run: cmd/steamrt/build
+        run: |
+          ccache -z
+          ./cmd/steamrt/build
+          ccache -s
 
   web:
-    name: Web
+    name: web / static
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
-      EM_VERSION: 6.0.0
-      EM_CACHE_FOLDER: 'emsdk-cache'
+      CCACHE_DIR: ${{ github.workspace }}/../ccache
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Install dependencies
+        timeout-minutes: 8
+        run: |
+          echo 'Acquire::Retries "3"; Acquire::http::Timeout "30"; Acquire::https::Timeout "30";' | sudo tee /etc/apt/apt.conf.d/80-ci-retries > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ccache
+
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      - name: Setup emscripten
-        uses: emscripten-core/setup-emsdk@v15
+      # cute_framework requires CMake 4.2; the runner ships 3.31. Brings Ninja too.
+      - uses: lukka/get-cmake@latest
         with:
-          version: ${{ env.EM_VERSION }}
-          actions-cache-folder: ${{ env.EM_CACHE_FOLDER }}
+          cmakeVersion: 4.4.4
+          ninjaVersion: latest
 
-      - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Setup Emscripten
+        uses: emscripten-core/setup-emsdk@v16
         with:
-          create-symlink: true
-          key: ccache-${{ github.job }}
-          max-size: 16GB
+          version: 6.0.12
+          actions-cache-folder: emsdk-cache
 
-      - name: Install CMake
-        uses: ssrobins/install-cmake@v1
-
-      - name: Prebuild emscripten libs
-        run: embuilder build libc sdl3
+      - name: Restore ccache
+        uses: actions/cache@v6
+        with:
+          path: ../ccache
+          key: ccache-web-${{ github.sha }}
+          restore-keys: ccache-web-
 
       - name: Build
-        run: cmd/web/build
+        run: |
+          ccache -z
+          ./cmd/web/build
+          ccache -s
 
-  win:
-    name: Windows
-    runs-on: windows-latest
+  windows:
+    name: windows / static
+    # Visual Studio 2026, which cmd/win/prepare.bat generates for.
+    runs-on: windows-2025
+    timeout-minutes: 40
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+      # cute_framework requires CMake 4.2; the runner ships 3.31.
+      - uses: lukka/get-cmake@latest
         with:
-          key: ccache-${{ github.job }}
-          max-size: 16GB
-          variant: sccache
+          cmakeVersion: 4.4.4
 
-      - name: Install CMake
-        uses: ssrobins/install-cmake@v1
-
+      # Through the submodule path: Git for Windows checks the `cmd` symlink out as a text file.
       - name: Build
-        env:
-          GENERATOR: "Ninja Multi-Config"
-        run: cmd/win/build.bat
+        shell: cmd
+        run: call deps\bgame\cmd\win\build.bat || exit /b 1

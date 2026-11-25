@@ -174,12 +174,12 @@ modal_yield(void) {
 
 static void
 modal_wrapper(CF_Coroutine coro) {
-	bgame_block_reload();
+	bgame_reload_block_t reload_block = bgame_block_reload();
 
 	modal_ctx_t ctx = *(modal_ctx_t*)cf_coroutine_get_udata(coro);
 	ctx.entry();
 
-	bgame_unblock_reload();
+	bgame_unblock_reload(reload_block);
 }
 
 static void

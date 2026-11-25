@@ -17,31 +17,38 @@ This is a tool to quickly achieve that.
 This project also serves as a way to test [bgame](https://github.com/bullno1/bgame) multiplatform build pipeline.
 
 # Building
+
+CMake 4.2 or newer is required.
+
 ## Windows
 
 ```
 .\bootstrap.bat
-.\cmd\win\prepare.bat  # A solution will be created at .build/win/<Config>
+.\deps\bgame\cmd\win\prepare.bat  # A solution will be created at .build/win
 # Either open it in Visual Studio or
-.\cmd\win\build.bat
+.\deps\bgame\cmd\win\build.bat
 ```
+
+The scripts are called through the submodule path since Git for Windows checks the `cmd` symlink out as a text file.
 
 The files should be in `bin/win/RelWithDebInfo-static` or `bin/win/Debug-static`.
 
 ## Linux
 
 ```
-./boostrap
+./bootstrap
 cmd/linux/build
 ```
 
 The files should be in `bin/linux/RelWithDebInfo-reloadable`.
+Use `RELOADABLE=OFF cmd/linux/build` for a static build in `bin/linux/RelWithDebInfo-static`.
 
 ## Web
 
 ```
-./boostrap
+./bootstrap
 cmd/web/build
 ```
 
 The files should be in `bin/web/RelWithDebInfo-static`.
+`cmd/web/run` serves them on localhost.
