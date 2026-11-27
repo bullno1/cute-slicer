@@ -17,7 +17,14 @@ typedef struct {
 	int x, y;
 } ivec2_t;
 
+// A directory remembered from a previous file dialog. Empty means none yet.
+typedef struct {
+	char path[4096];
+} last_dir_t;
+
 BGAME_VAR(bool, app_created) = false;
+BGAME_VAR(last_dir_t, last_open_dir) = { 0 };
+BGAME_VAR(last_dir_t, last_save_dir) = { 0 };
 BGAME_VAR(CF_V2, draw_offset) = { 0 };
 BGAME_VAR(float, draw_scale) = 1.f;
 BGAME_VAR(bool, draw_grid) = true;
@@ -169,6 +176,33 @@ ends_with(const char* str, const char* suffix) {
 	return strcmp(str + str_len - suffix_len, suffix) == 0;
 }
 
+// Remember the directory containing `filename` for the next dialog.
+static void
+remember_dir(last_dir_t* dir, const char* filename) {
+	if (filename == NULL) { return; }
+
+	const char* sep = strrchr(filename, '/');
+#ifdef _WIN32
+	const char* backslash = strrchr(filename, '\\');
+	if (backslash != NULL && (sep == NULL || backslash > sep)) { sep = backslash; }
+#endif
+	// On the web, only the file name is known
+	if (sep == NULL) { return; }
+
+	size_t len = (size_t)(sep - filename);
+	// Keep the separator for a root directory: "/" or "C:\"
+	if (len == 0 || filename[len - 1] == ':') { len += 1; }
+	if (len >= sizeof(dir->path)) { return; }
+
+	memcpy(dir->path, filename, len);
+	dir->path[len] = '\0';
+}
+
+static const char*
+suggested_dir(const last_dir_t* dir) {
+	return dir->path[0] != '\0' ? dir->path : NULL;
+}
+
 static bool
 modal_yield(void) {
 	cf_coroutine_yield(cf_coroutine_currently_running());
@@ -226,6 +260,7 @@ open_image(void) {
 		.parent_window = cf_app_get_window(),
 		.filters = filters,
 		.num_filters = CF_ARRAY_SIZE(filters),
+		.directory = suggested_dir(&last_open_dir),
 	});
 
 	while (modal_yield() && ufa_check_open_file(open_file) == UFA_PENDING) {
@@ -234,6 +269,8 @@ open_image(void) {
 	if (ufa_check_open_file(open_file) != UFA_OK) {
 		goto end;
 	}
+
+	remember_dir(&last_open_dir, ufa_get_open_file_name(open_file));
 
 	size_t file_size = ufa_get_open_file_size(open_file);
 	void* buf = barena_memalign(&arena, file_size, 1);
@@ -286,6 +323,7 @@ save_slice(void) {
 		.parent_window = cf_app_get_window(),
 		.filters = filters,
 		.num_filters = CF_ARRAY_SIZE(filters),
+		.directory = suggested_dir(&last_save_dir),
 		.suggested_name = "grid.png",
 	});
 
@@ -295,6 +333,8 @@ save_slice(void) {
 	if (ufa_check_save_file(save_file) != UFA_OK) {
 		goto end;
 	}
+
+	remember_dir(&last_save_dir, ufa_get_save_file_name(save_file));
 
 	CF_Image slice = {
 		.w = grid_size.x,
